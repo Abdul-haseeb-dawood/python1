@@ -11,7 +11,7 @@ st.markdown(
     """
     <style>
     .stApp {
-        background-color: white;
+        background-color: gold;
         color: purple;
     }
     </style>
