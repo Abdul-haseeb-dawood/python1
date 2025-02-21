@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from io import BytesIO
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 st.set_page_config(page_title="Data-sweeper", layout="wide")
 
