@@ -2,87 +2,144 @@ import streamlit as st
 import pandas as pd
 import os
 from io import BytesIO
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Start your app
 st.set_page_config(page_title="Data-sweeper", layout="wide")
 
-# Custom CSS
+# Custom Styling
 st.markdown(
     """
     <style>
     .stApp {
-        background-color: white;
+        background: linear-gradient(to right,rgb(118, 158, 205),rgb(248, 209, 224));
         color: purple;
+    }
+    
+    .stButton>button {
+        background-color: #FFC819E;
+        color: black;
+        font-weight: bold;
+        border-radius: 10px;
+        padding: 10px;
+        border: none;
+    }
+    .stDownloadButton>button {
+        background-color:rgb(141, 104, 209);
+        color: black;
+        font-weight: bold;
+        border-radius: 10px;
+        padding: 10px;
+        border: none;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-st.title("💿 Data-sweeper Sterling Integrator by Soniya")
-st.write("Transform your file between CSV & Excel format with built-in data cleaning & visualization")
+st.title("💿 Data-sweeper Sterling Integrator by A.Haseeb")
+st.write("Transform your file between CSV, Excel, JSON & TXT format with built-in data cleaning & visualization.")
 
 # File uploader
-uploaded_files = st.file_uploader("Upload your files (accepts CSV or Excel):", type=["csv", "xlsx"], accept_multiple_files=True)
+uploaded_files = st.file_uploader(
+    "Upload your files (CSV, Excel, JSON, TXT):",
+    type=["csv", "xlsx", "json", "txt"],
+    accept_multiple_files=True
+)
 
 if uploaded_files:
     for file in uploaded_files:
         file_ext = os.path.splitext(file.name)[-1].lower()
-        
+
+        # Read file based on type
         if file_ext == ".csv":
             df = pd.read_csv(file)
-        elif file_ext == ".xlsx": 
-            df = pd.read_excel(file)
+        elif file_ext == ".xlsx":
+            try:
+                df = pd.read_excel(file, engine="openpyxl")
+            except Exception as e:
+                st.error(f"Error reading Excel file: {e}")
+                continue
+        elif file_ext == ".json":
+            df = pd.read_json(file)
+        elif file_ext == ".txt":
+            df = pd.read_csv(file, delimiter="\t")  # Tab-separated text files
         else:
             st.error(f"Unsupported file type: {file_ext}")
-            continue 
+            continue
 
         # File details
-        st.write("🔎 Preview the head of the DataFrame")
-        st.dataframe(df.head())
+        st.write(f"📂 **File Details:**")
+        file_size = len(file.getvalue()) / 1024  # Convert bytes to KB
+        st.write(f"- **Name:** {file.name}")
+        st.write(f"- **Type:** {file_ext.upper()}")
+        st.write(f"- **Size:** {file_size:.2f} KB")
+        st.write(f"- **Rows:** {df.shape[0]} | **Columns:** {df.shape[1]}")
+
+        # Editable Data Preview
+        st.subheader("📝 Editable Data Preview")
+        edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic")
 
         # Data cleaning options
         st.subheader("🛠️ Data Cleaning Options")
         if st.checkbox(f"Clean data for {file.name}"):
             col1, col2 = st.columns(2)
+            
             with col1:
-                if st.button(f"Remove Duplicates from {file.name}"):
-                    df.drop_duplicates(inplace=True)
-                    st.write("✅ Duplicates removed!")
-
+                if st.button(f"Remove duplicates from {file.name}"):
+                    edited_df.drop_duplicates(inplace=True)
+                    st.success("✅ Duplicates removed!")
+            
             with col2:
-                if st.button(f"Fill Missing Values for {file.name}"):
-                    numeric_cols = df.select_dtypes(include=["number"]).columns
-                    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
-                    st.write("✔️ Missing values have been filled!")
-        
-        # Select columns to keep
+                if st.button(f"Fill missing values for {file.name}"):
+                    numeric_cols = edited_df.select_dtypes(include=["number"]).columns
+                    if len(numeric_cols) > 0:
+                        edited_df[numeric_cols] = edited_df[numeric_cols].fillna(edited_df[numeric_cols].mean())
+                        st.success("✔️ Missing values have been filled!")
+                    else:
+                        st.warning("⚠️ No numeric columns found to fill missing values.")
+
         st.subheader("🎯 Select Columns to Keep")
-        columns = st.multiselect(f"Choose columns for {file.name}", df.columns, default=df.columns)
-        df = df[columns]
+        columns = st.multiselect(f"Choose columns for {file.name}", edited_df.columns, default=edited_df.columns)
+        edited_df = edited_df[columns]
 
-        # Data visualization
-        st.subheader("📊 Data Visualization")
-        if st.checkbox(f"Show visualization for {file.name}"):
-            st.bar_chart(df.select_dtypes(include="number").iloc[:, :2])
+        # Data Visualization
+        st.subheader("📊 Data Visualizations")
+        numeric_cols = edited_df.select_dtypes(include='number').columns
 
-        # Conversion option
-        st.subheader("🔁 Conversion Options")
-        conversion_type = st.radio(f"Convert {file.name} to:", ["csv", "Excel"], key=file.name)
+        if len(numeric_cols) == 0:
+            st.warning(f"⚠️ No numeric columns found in {file.name} for visualization.")
+        else:
+            selected_columns = st.multiselect(f"Select columns for visualization ({file.name})", numeric_cols, default=numeric_cols[:2])
+            
+            if selected_columns:
+                st.bar_chart(edited_df[selected_columns])  # Show bar chart
+
+        # Conversion options
+        st.subheader("🔁 Conversion Option")
+        conversion_type = st.radio(f"Convert {file.name} to:", ["CSV", "Excel", "JSON", "TXT"], key=file.name)
         
         if st.button(f"Convert {file.name}"):
             buffer = BytesIO()
-            if conversion_type == "csv":
+            
+            if conversion_type == "CSV":
                 df.to_csv(buffer, index=False)
                 file_name = file.name.replace(file_ext, ".csv")
                 mime_type = "text/csv"
             elif conversion_type == "Excel":
-                df.to_excel(buffer, index=False)
+                df.to_excel(buffer, index=False, engine="openpyxl")
                 file_name = file.name.replace(file_ext, ".xlsx")
                 mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            elif conversion_type == "JSON":
+                df.to_json(buffer, orient="records")
+                file_name = file.name.replace(file_ext, ".json")
+                mime_type = "application/json"
+            elif conversion_type == "TXT":
+                df.to_csv(buffer, index=False, sep="\t")
+                file_name = file.name.replace(file_ext, ".txt")
+                mime_type = "text/plain"
             
             buffer.seek(0)
-            
             st.download_button(
                 label=f"Download {file.name} as {conversion_type}",
                 data=buffer,
